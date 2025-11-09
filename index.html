@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modi ji Fly</title>
+    <meta name="description" content="A simple, mobile-friendly Modi ji Fly game in one HTML file.">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='%2366b3ff' d='M2 8c0 2.21 1.79 4 4 4h4c2.21 0 4-1.79 4-4s-1.79-4-4-4H6C3.79 4 2 5.79 2 8z'/%3E%3Cpath fill='%233385ff' d='M8 4l2 2-2 2-2-2 2-2z'/%3E%3C/svg%3E">
+    <style>
+        :root {
+            --text-color-light: #333;
+            --ui-bg-color-light: rgba(255, 255, 255, 0.8);
+            --button-color-light: #007bff;
+            --button-text-color-light: white;
+
+            --text-color-dark: #ecf0f1;
+            --ui-bg-color-dark: rgba(0, 0, 0, 0.8);
+            --button-color-dark: #3498db;
+            --button-text-color-dark: white;
+
+            --current-text-color: var(--text-color-light);
+            --current-ui-bg-color: var(--ui-bg-color-light);
+            --current-button-color: var(--button-color-light);
+            --current-button-text-color: var(--button-text-color-light);
+        }
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #333; /* Fallback for centering */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: var(--current-text-color);
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        body.dark-theme {
+            --current-text-color: var(--text-color-dark);
+            --current-ui-bg-color: var(--ui-bg-color-dark);
+            --current-button-color: var(--button-color-dark);
+            --current-button-text-color: var(--button-text-color-dark);
+        }
+
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            max-width: 600px; /* Max width for desktop */
+            max-height: 900px; /* Max height for desktop */
+            background-color: transparent; /* Background image will cover */
+            overflow: hidden;
+            touch-action: manipulation; /* Prevent default touch actions like zoom */
+            display: flex;
+            flex-direction: column;
+            transition: background-color 0.3s;
+        }
+
+        #game-canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        #ui-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background-color: var(--current-ui-bg-color);
+            color: var(--current-text-color);
+            text-align: center;
+            font-size: 1.2em;
+            z-index: 100; /* This was causing the issue, covering scores */
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        #ui-overlay.hidden {
+            display: none;
+        }
+
+        #ui-overlay h2 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        #ui-overlay p {
+            font-size: 1em;
+            margin-bottom: 20px;
+        }
+
+        #game-over-image {
+            max-width: 80%;
+            max-height: 40%;
+            object-fit: contain;
+            margin-bottom: 20px;
+            display: none; /* Hidden by default */
+        }
+
+        .button {
+            padding: 12px 25px;
+            font-size: 1.2em;
+            cursor: pointer;
+            border: none;
+            border-radius: 8px;
+            background-color: var(--current-button-color);
+            color: var(--current-button-text-color);
+            margin: 10px 5px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            transition: background-color 0.2s, transform 0.1s, box-shadow 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .button:hover {
+            background-color: var(--current-button-color);
+            filter: brightness(1.1);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.25);
+        }
+
+        .button:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .button:focus-visible {
+            outline: 2px solid var(--current-button-color);
+            outline-offset: 3px;
+        }
+
+        .button svg {
+            width: 1.2em;
+            height: 1.2em;
+            margin-right: 8px;
+            fill: var(--current-button-text-color);
+        }
+
+        /* FIX: Increased z-index for score displays to ensure they are always on top */
+        #score-display, #high-score-display {
+            position: absolute;
+            top: 17px;
+            font-size: 1.2em;
+            font-weight: bold;
+            color: var(--current-text-color);
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+            z-index: 110; /* Higher than ui-overlay's z-index */
+        }
+
+        #score-display {
+            left: 52%;
+            transform: translateX(-50%);
+        }
+
+        #high-score-display {
+            right: 15px;
+        }
+
+        #control-panel {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            display: flex;
+            gap: 10px;
+            z-index: 110; /* Also ensure control panel is on top */
+        }
+
+        #control-panel .button {
+            padding: 8px 12px;
+            font-size: 0.9em;
+            margin: 0;
+            box-shadow: none;
+            border-radius: 5px;
+        }
+
+        #control-panel .button svg {
+            margin-right: 0;
+            width: 1em;
+            height: 1em;
+        }
+
+        /* Screen shake effect */
+        .shake {
+            animation: shake 0.2s cubic-bezier(.36,.07,.19,.97) both;
+            transform: translate3d(0, 0, 0);
+            backface-visibility: hidden;
+            perspective: 1000px;
+        }
+
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-1px, 0, 0); }
+            20%, 80% { transform: translate3d(2px, 0, 0); }
+            30%, 70% { transform: translate3d(-4px, 0, 0); }
+            40%, 60% { transform: translate3d(4px, 0, 0); }
+            50% { transform: translate3d(-4px, 0, 0); }
+        }
+
+        /* Fade in effect */
+        @keyframes fade-in {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .fade-in {
+            animation: fade-in 0.5s ease-out forwards;
+        }
+
+        /* Reduced motion support */
+        @media (prefers-reduced-motion: reduce) {
+            .shake { animation: none !important; }
+            .fade-in { animation: none !important; }
+            body, #game-container, .button, #ui-overlay { transition: none !important; }
+        }
+    </style>
+</head>
+<body>
+    <!-- README:
+    Modi ji Fly Game
+
+    How to Play:
+    - Tap anywhere on the game area or press Space/Arrow Up to make the bird flap.
+    - Avoid hitting pipes and the ground.
+    - Score points by passing through pipes.
+    - The game gets slightly faster over time.
+
+    Controls:
+    - Mobile: Tap anywhere to flap.
+    - Desktop: Spacebar or Arrow Up to flap. 'P' to Pause/Resume. 'R' to Restart.
+
+    Deployment to GitHub Pages:
+    1. Create a new GitHub repository.
+    2. Save this entire HTML file as `index.html` in the root of your repository.
+    3. Make sure to place the image and audio files (bg.png, pip.png, icon.png, over.png, bgmusic.mp3, musiclop.mp3) in the same directory as `index.html`.
+    4. Go to your repository settings on GitHub.
+    5. Navigate to the "Pages" section.
+    6. Under "Branch", select `main` (or your primary branch) and `/ (root)` for the folder.
+    7. Click "Save".
+    8. Your game will be available at `https://<YOUR_USERNAME>.github.io/<YOUR_REPOSITORY_NAME>/` in a few minutes.
+
+    Enjoy!
+    -->
+    <!-- Version: 1.1.1 -->
+    <div id="game-container">
+        <canvas id="game-canvas"></canvas>
+
+        <div id="score-display" aria-live="polite">Score: 0</div>
+        <div id="high-score-display">High Score: 0</div>
+
+        <div id="control-panel">
+            <button id="pause-button" class="button" aria-label="Pause game">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M6 4h4v16H6zM14 4h4v16h-4z"/>
+                </svg>
+            </button>
+            <button id="sound-toggle-button" class="button" aria-label="Toggle sound">
+                <svg id="sound-on-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M11 5L6 9H2v6h4l5 4zM19.07 4.93a10 10 0 010 14.14M22.07 1.93a15 15 0 010 20.14"/>
+                </svg>
+                <svg id="sound-off-icon" class="hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M11 5L6 9H2v6h4l5 4zM23 9l-6 6M17 9l6 6"/>
+                </svg>
+            </button>
+            <button id="theme-toggle-button" class="button" aria-label="Toggle light/dark theme">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="5"/>
+                    <line x1="12" y1="1" x2="12" y2="3"/>
+                    <line x1="12" y1="21" x2="12" y2="23"/>
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                    <line x1="1" y1="12" x2="3" y2="12"/>
+                    <line x1="21" y1="12" x2="23" y2="12"/>
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                </svg>
+            </button>
+        </div>
+
+        <div id="ui-overlay">
+            <h2>Modi ji Fly</h2>
+            <p>Tap to flap or use Space/Arrow Up. Avoid pipes and ground!</p>
+            <img id="game-over-image" src="over.png" alt="Game Over" class="Show">
+            <button id="play-button" class="button" aria-label="Start game">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                </svg>
+                Play
+            </button>
+            <button id="restart-overlay-button" class="button hidden" aria-label="Restart game">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.55 10.05A10 10 0 0117 4l3.54-3.54"/><path d="M20.45 13.95A10 10 0 017 20l-3.54 3.54"/>
+                </svg>
+                Restart
+            </button>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            // Game State
+            const GAME_STATE = {
+                START: 'start',
+                PLAYING: 'playing',
+                PAUSED: 'paused',
+                GAME_OVER: 'game_over'
+            };
+            let currentState = GAME_STATE.START;
+
+            // Canvas and Context
+            const canvas = document.getElementById('game-canvas');
+            const ctx = canvas.getContext('2d');
+            let gameContainer = document.getElementById('game-container');
+
+            // UI Elements
+            const uiOverlay = document.getElementById('ui-overlay');
+            const playButton = document.getElementById('play-button');
+            const restartOverlayButton = document.getElementById('restart-overlay-button');
+            const pauseButton = document.getElementById('pause-button');
+            const soundToggleButton = document.getElementById('sound-toggle-button');
+            const soundOnIcon = document.getElementById('sound-on-icon');
+            const soundOffIcon = document.getElementById('sound-off-icon');
+            const themeToggleButton = document.getElementById('theme-toggle-button');
+            const scoreDisplay = document.getElementById('score-display');
+            const highScoreDisplay = document.getElementById('high-score-display');
+            const gameOverImage = document.getElementById('game-over-image');
+
+
+            // Game Settings
+            const GAME_WIDTH = 320; // Base width for game logic
+            const GAME_HEIGHT = 480; // Base height for game logic
+            const GRAVITY = 800; // px/s^2
+            const FLAP_VELOCITY = -300; // px/s
+            const PIPE_SPEED = 120; // px/s
+            const PIPE_WIDTH = 50; // px
+            const PIPE_GAP_HEIGHT = 140; // px
+            const PIPE_SPAWN_INTERVAL = 2000; // ms
+            const GROUND_HEIGHT = 60; // px
+            const BIRD_SIZE = 25; // px (square for simplicity, actual image will be used)
+            const PARALLAX_SPEED_BG = 0.5; // Multiplier for background image speed
+            const DIFFICULTY_RAMP_INTERVAL = 10000; // ms
+            const DIFFICULTY_INCREASE_FACTOR = 1.02; // How much speed increases
+
+            let animationFrameId;
+            let lastTime = 0;
+            let deltaTime = 0; // seconds
+
+            // Bird
+            let bird = {
+                x: GAME_WIDTH / 4,
+                y: GAME_HEIGHT / 2,
+                vy: 0, // vertical velocity
+                rotation: 0, // for simple visual tilt
+                width: BIRD_SIZE,
+                height: BIRD_SIZE,
+            };
+
+            // Pipes
+            let pipes = [];
+            let timeSinceLastPipe = 0;
+            let score = 0;
+            let highScore = 0;
+            let pipeSpeedMultiplier = 1;
+
+            // Background Image
+            const backgroundImage = new Image();
+            backgroundImage.src = 'bg.png';
+            let bgOffset = 0;
+
+            // Pipe Image
+            const pipeImage = new Image();
+            pipeImage.src = 'pip.png'; // Will be drawn rotated for top pipes
+
+            // Bird Image
+            const birdImage = new Image();
+            birdImage.src = 'icon.png';
+
+            // Audio
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            let audioContext;
+            let soundEnabled = true; // Default to sound on
+
+            // Background Music
+            const bgMusic = new Audio('bgmusic.mp3');
+            bgMusic.loop = true;
+            bgMusic.volume = 0.3; // Lower volume for background music
+
+            // Game Over Music
+            const gameOverMusic = new Audio('musiclop.mp3');
+            gameOverMusic.volume = 0.5;
+
+            // Input handling
+            let flapDebounce = false;
+            let isPaused = false;
+            let prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+            // --- Utility Functions ---
+
+            function clamp(value, min, max) {
+                return Math.max(min, Math.min(value, max));
+            }
+
+            function getCanvasDimensions() {
+                const rect = gameContainer.getBoundingClientRect();
+                return { width: rect.width, height: rect.height };
+            }
+
+            function scaleToCanvas(value, dimension) {
+                const { width, height } = getCanvasDimensions();
+                if (dimension === 'x' || dimension === 'width') {
+                    return (value / GAME_WIDTH) * width;
+                } else if (dimension === 'y' || dimension === 'height') {
+                    return (value / GAME_HEIGHT) * height;
+                }
+                return value;
+            }
+
+            function createAudioBuffer(frequency, duration, type = 'sine', volume = 0.5) {
+                if (!audioContext) return;
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+
+                oscillator.type = type;
+                oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+                gainNode.gain.setValueAtTime(volume, audioContext.currentTime);
+
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+
+                oscillator.start();
+                oscillator.stop(audioContext.currentTime + duration);
+            }
+
+            function playFlapSound() {
+                if (soundEnabled) {
+                    createAudioBuffer(600, 0.08, 'triangle', 0.1); // Short high pitch
+                }
+            }
+
+            function playPointSound() {
+                if (soundEnabled) {
+                    createAudioBuffer(800, 0.05, 'sine', 0.15); // Higher pitch for point
+                }
+            }
+
+            function playCollisionSound() {
+                if (soundEnabled) {
+                    createAudioBuffer(100, 0.2, 'sawtooth', 0.2); // Low rumbling sound
+                }
+            }
+
+            function startBgMusic() {
+                if (soundEnabled && bgMusic.paused) {
+                    bgMusic.play().catch(e => console.error("Error playing background music:", e));
+                }
+            }
+
+            function stopBgMusic() {
+                if (!bgMusic.paused) {
+                    bgMusic.pause();
+                    bgMusic.currentTime = 0;
+                }
+            }
+
+            function startGameOverMusic() {
+                if (soundEnabled && gameOverMusic.paused) {
+                    gameOverMusic.play().catch(e => console.error("Error playing game over music:", e));
+                }
+            }
+
+            function stopGameOverMusic() {
+                if (!gameOverMusic.paused) {
+                    gameOverMusic.pause();
+                    gameOverMusic.currentTime = 0;
+                }
+            }
+
+            // --- Game Initialization and Reset ---
+
+            function initGame() {
+                // Initialize AudioContext on first user interaction
+                if (!audioContext) {
+                    audioContext = new AudioContext();
+                }
+
+                // Load high score
+                highScore = parseInt(localStorage.getItem('birdFlyHighScore') || '0', 10);
+                highScoreDisplay.textContent = `High Score: ${highScore}`;
+
+                // Load sound preference
+                soundEnabled = localStorage.getItem('birdFlySoundEnabled') === 'true' || localStorage.getItem('birdFlySoundEnabled') === null; // Default to true if not set
+                updateSoundToggleButton();
+
+                // Load theme preference
+                const savedTheme = localStorage.getItem('birdFlyTheme');
+                if (savedTheme === 'dark') {
+                    document.body.classList.add('dark-theme');
+                } else {
+                    document.body.classList.remove('dark-theme');
+                }
+
+                resizeCanvas();
+                window.addEventListener('resize', resizeCanvas);
+                attachInputListeners();
+            }
+
+            function resetGame() {
+                bird = {
+                    x: GAME_WIDTH / 4,
+                    y: GAME_HEIGHT / 2,
+                    vy: 0,
+                    rotation: 0,
+                    width: BIRD_SIZE,
+                    height: BIRD_SIZE,
+                };
+                pipes = [];
+                score = 0;
+                scoreDisplay.textContent = `Score: ${score}`;
+                timeSinceLastPipe = 0;
+                pipeSpeedMultiplier = 1;
+                bgOffset = 0;
+                isPaused = false;
+                pauseButton.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M6 4h4v16H6zM14 4h4v16h-4z"/>
+                </svg>`;
+                currentState = GAME_STATE.PLAYING;
+                gameContainer.classList.add('fade-in');
+                setTimeout(() => gameContainer.classList.remove('fade-in'), 500); // Remove after animation
+            }
+
+            // --- Input Handlers ---
+
+            function handleFlap() {
+                if (flapDebounce) return;
+
+                if (currentState === GAME_STATE.START) {
+                    startGame();
+                    return;
+                }
+                if (currentState === GAME_STATE.GAME_OVER) {
+                    restartGame();
+                    return;
+                }
+                if (currentState === GAME_STATE.PLAYING) {
+                    bird.vy = FLAP_VELOCITY;
+                    playFlapSound();
+                    flapDebounce = true;
+                    setTimeout(() => flapDebounce = false, 100); // Debounce to prevent multiple flaps per frame
+                }
+            }
+
+            function attachInputListeners() {
+                // Touch/Click to flap
+                canvas.addEventListener('mousedown', (e) => {
+                    if (e.button === 0) { // Left click
+                        handleFlap();
+                    }
+                });
+                canvas.addEventListener('touchstart', (e) => {
+                    e.preventDefault(); // Prevent scrolling/zooming
+                    handleFlap();
+                }, { passive: false });
+
+                // Keyboard input
+                document.addEventListener('keydown', (e) => {
+                    if (e.code === 'Space' || e.code === 'ArrowUp') {
+                        e.preventDefault();
+                        handleFlap();
+                    } else if (e.code === 'P' && currentState !== GAME_STATE.START && currentState !== GAME_STATE.GAME_OVER) {
+                        togglePause();
+                    } else if (e.code === 'R' && currentState === GAME_STATE.GAME_OVER) {
+                        restartGame();
+                    }
+                });
+
+                // UI Button Listeners
+                playButton.addEventListener('click', startGame);
+                restartOverlayButton.addEventListener('click', restartGame);
+                pauseButton.addEventListener('click', togglePause);
+                soundToggleButton.addEventListener('click', toggleSound);
+                themeToggleButton.addEventListener('click', toggleTheme);
+            }
+
+            // --- Game Loop ---
+
+            function gameLoop(currentTime) {
+                if (!lastTime) {
+                    lastTime = currentTime;
+                    animationFrameId = requestAnimationFrame(gameLoop);
+                    return;
+                }
+
+                deltaTime = (currentTime - lastTime) / 1000; // Convert to seconds
+                lastTime = currentTime;
+
+                if (currentState === GAME_STATE.PLAYING) {
+                    update(deltaTime);
+                }
+                draw();
+
+                animationFrameId = requestAnimationFrame(gameLoop);
+            }
+
+            // --- Update Game State ---
+
+            function update(dt) {
+                // Bird physics
+                bird.vy += GRAVITY * dt;
+                bird.y += bird.vy * dt;
+
+                // Clamp bird velocity to prevent tunneling (if moving very fast)
+                bird.vy = clamp(bird.vy, -800, 800);
+
+                // Update bird rotation based on velocity
+                bird.rotation = clamp(bird.vy / 600, -0.7, 0.7); // Roughly -40 to +40 degrees in radians
+
+                // Ground collision
+                if (bird.y + bird.height / 2 > GAME_HEIGHT - GROUND_HEIGHT) {
+                    bird.y = GAME_HEIGHT - GROUND_HEIGHT - bird.height / 2;
+                    bird.vy = 0;
+                    gameOver();
+                    return; // Stop further updates if game is over
+                }
+                // Ceiling collision
+                if (bird.y - bird.height / 2 < 0) {
+                    bird.y = bird.height / 2;
+                    bird.vy = 0;
+                }
+
+                // Pipe spawning
+                timeSinceLastPipe += dt * 1000;
+                if (timeSinceLastPipe > PIPE_SPAWN_INTERVAL / pipeSpeedMultiplier) {
+                    spawnPipe();
+                    timeSinceLastPipe = 0;
+                }
+
+                // Update pipes and check collisions
+                pipes.forEach(pipe => {
+                    pipe.x -= (PIPE_SPEED * pipeSpeedMultiplier) * dt;
+
+                    // Collision detection with bird
+                    const birdScaledX = scaleToCanvas(bird.x - bird.width / 2, 'x');
+                    const birdScaledY = scaleToCanvas(bird.y - bird.height / 2, 'y');
+                    const birdScaledWidth = scaleToCanvas(bird.width, 'width');
+                    const birdScaledHeight = scaleToCanvas(bird.height, 'height');
+
+                    const pipeScaledX = scaleToCanvas(pipe.x, 'x');
+                    const pipeScaledWidth = scaleToCanvas(PIPE_WIDTH, 'width');
+                    const pipeScaledGapTop = scaleToCanvas(pipe.gapTop, 'y');
+                    const pipeScaledGapBottom = scaleToCanvas(pipe.gapTop + PIPE_GAP_HEIGHT, 'y');
+                    // const groundScaledHeight = scaleToCanvas(GROUND_HEIGHT, 'height'); // Not used directly in collision
+
+                    // Check for horizontal overlap
+                    const horizontalOverlap = birdScaledX < pipeScaledX + pipeScaledWidth && birdScaledX + birdScaledWidth > pipeScaledX;
+
+                    if (horizontalOverlap) {
+                        // Check collision with top pipe
+                        if (birdScaledY < pipeScaledGapTop) {
+                            gameOver();
+                            return;
+                        }
+                        // Check collision with bottom pipe
+                        if (birdScaledY + birdScaledHeight > pipeScaledGapBottom) {
+                            gameOver();
+                            return;
+                        }
+                    }
+
+                    // Score increment
+                    if (!pipe.passed && pipe.x + PIPE_WIDTH < bird.x - bird.width/2) { // Bird passed pipe entirely
+                        score++;
+                        scoreDisplay.textContent = `Score: ${score}`;
+                        playPointSound();
+                        pipe.passed = true;
+                        if (score > highScore) {
+                            highScore = score;
+                            highScoreDisplay.textContent = `High Score: ${highScore}`;
+                            localStorage.setItem('birdFlyHighScore', highScore);
+                        }
+                    }
+                });
+
+                // Filter out off-screen pipes (recycle them implicitly by garbage collection or explicit pooling for performance)
+                pipes = pipes.filter(pipe => pipe.x + PIPE_WIDTH > 0);
+
+                // Parallax background update
+                bgOffset = (bgOffset + (PIPE_SPEED * pipeSpeedMultiplier * PARALLAX_SPEED_BG) * dt);
+                if (bgOffset >= backgroundImage.width) {
+                    bgOffset -= backgroundImage.width;
+                }
+
+
+                // Difficulty ramp
+                if (score > 0 && Math.floor(score / 5) > Math.floor((score - 1) / 5)) { // Increase difficulty every 5 points
+                     pipeSpeedMultiplier *= DIFFICULTY_INCREASE_FACTOR;
+                     pipeSpeedMultiplier = clamp(pipeSpeedMultiplier, 1, 2.5); // Cap difficulty
+                }
+            }
+
+            // --- Draw Game Elements ---
+
+            function draw() {
+                const { width, height } = getCanvasDimensions();
+                ctx.clearRect(0, 0, width, height);
+
+                // Draw Parallax Background Image
+                const bgScaledWidth = scaleToCanvas(backgroundImage.width, 'x');
+                const bgScaledHeight = scaleToCanvas(GAME_HEIGHT, 'y'); // Assuming background fills game height
+
+                let currentBgOffset = Math.round(scaleToCanvas(bgOffset, 'x'));
+
+                // Draw first instance of background image
+                ctx.drawImage(backgroundImage, -currentBgOffset, 0, bgScaledWidth, bgScaledHeight);
+
+                // Draw second instance if needed for seamless loop
+                ctx.drawImage(backgroundImage, -currentBgOffset + bgScaledWidth, 0, bgScaledWidth, bgScaledHeight);
+
+
+                // Pipes
+                pipes.forEach(pipe => {
+                    const scaledX = Math.round(scaleToCanvas(pipe.x, 'x'));
+                    const scaledWidth = Math.round(scaleToCanvas(PIPE_WIDTH, 'width'));
+                    const scaledGapTop = Math.round(scaleToCanvas(pipe.gapTop, 'y'));
+                    const scaledGapHeight = Math.round(scaleToCanvas(PIPE_GAP_HEIGHT, 'height'));
+                    const scaledGameHeight = Math.round(scaleToCanvas(GAME_HEIGHT, 'y'));
+                    const scaledGroundHeight = Math.round(scaleToCanvas(GROUND_HEIGHT, 'height'));
+
+                    // Top pipe (rotated)
+                    ctx.save();
+                    ctx.translate(scaledX + scaledWidth / 2, scaledGapTop); // Pivot point for rotation
+                    ctx.scale(1, -1); // Flip vertically
+                    ctx.drawImage(pipeImage, -scaledWidth / 2, 0, scaledWidth, scaledGapTop);
+                    ctx.restore();
+
+                    // Bottom pipe
+                    ctx.drawImage(pipeImage, scaledX, scaledGapTop + scaledGapHeight, scaledWidth, scaledGameHeight - scaledGapTop - scaledGapHeight - scaledGroundHeight);
+                });
+
+                // Ground
+                ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--current-ground-color'); // Keep ground simple for now, can be image if provided
+                ctx.fillRect(0, scaleToCanvas(GAME_HEIGHT - GROUND_HEIGHT, 'y'), width, scaleToCanvas(GROUND_HEIGHT, 'height'));
+
+                // Bird
+                ctx.save();
+                const birdScaledX = Math.round(scaleToCanvas(bird.x, 'x'));
+                const birdScaledY = Math.round(scaleToCanvas(bird.y, 'y'));
+                const birdScaledWidth = Math.round(scaleToCanvas(bird.width, 'width'));
+                const birdScaledHeight = Math.round(scaleToCanvas(bird.height, 'height'));
+
+                ctx.translate(birdScaledX, birdScaledY);
+                ctx.rotate(bird.rotation);
+                ctx.drawImage(birdImage, -birdScaledWidth / 2, -birdScaledHeight / 2, birdScaledWidth, birdScaledHeight);
+                ctx.restore();
+            }
+
+            // --- Game Logic Functions ---
+
+            function spawnPipe() {
+                const minGapY = GAME_HEIGHT * 0.2; // 20% from top
+                const maxGapY = GAME_HEIGHT * 0.6; // 60% from top
+                const gapTop = Math.random() * (maxGapY - minGapY) + minGapY;
+
+                pipes.push({
+                    x: GAME_WIDTH,
+                    gapTop: gapTop,
+                    passed: false // To track if bird has passed it for scoring
+                });
+            }
+
+            function startGame() {
+                uiOverlay.classList.add('hidden');
+                gameOverImage.classList.add('hidden');
+                stopGameOverMusic();
+                resetGame();
+                startBgMusic();
+                requestAnimationFrame(gameLoop);
+            }
+
+            function gameOver() {
+                currentState = GAME_STATE.GAME_OVER;
+                playCollisionSound();
+                stopBgMusic();
+                startGameOverMusic();
+                cancelAnimationFrame(animationFrameId);
+                uiOverlay.classList.remove('hidden');
+                playButton.classList.add('hidden');
+                restartOverlayButton.classList.remove('hidden');
+                gameOverImage.classList.remove('hidden'); // Show game over image
+                uiOverlay.querySelector('h2').textContent =`Game Over! Score: ${score}`;
+                uiOverlay.querySelector('p').textContent = `High Score: ${highScore}`;
+
+                if (!prefersReducedMotion) {
+                    gameContainer.classList.add('shake');
+                    setTimeout(() => gameContainer.classList.remove('shake'), 200);
+                }
+            }
+
+            function restartGame() {
+                uiOverlay.querySelector('h2').textContent = 'Bird Fly';
+                uiOverlay.querySelector('p').textContent = 'Tap to flap or use Space/Arrow Up. Avoid pipes and ground!';
+                playButton.classList.remove('hidden');
+                restartOverlayButton.classList.add('hidden');
+                gameOverImage.classList.add('hidden'); // Hide game over image
+                uiOverlay.classList.add('hidden');
+                stopGameOverMusic();
+                resetGame();
+                startBgMusic();
+                requestAnimationFrame(gameLoop);
+            }
+
+            function togglePause() {
+                if (currentState === GAME_STATE.START || currentState === GAME_STATE.GAME_OVER) return;
+
+                isPaused = !isPaused;
+                if (isPaused) {
+                    currentState = GAME_STATE.PAUSED;
+                    cancelAnimationFrame(animationFrameId);
+                    stopBgMusic();
+                    uiOverlay.classList.remove('hidden');
+                    playButton.classList.add('hidden');
+                    restartOverlayButton.classList.add('hidden');
+                    gameOverImage.classList.add('hidden'); // Ensure game over image is hidden on pause
+                    uiOverlay.querySelector('h2').textContent = 'Paused';
+                    uiOverlay.querySelector('p').textContent = 'Press "P" or click "Resume" to continue.';
+                    pauseButton.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                    </svg>`; // Play icon
+                    playButton.textContent = 'Resume'; // Change text for resume logic
+                    playButton.classList.remove('hidden'); // Show play button to resume
+                } else {
+                    currentState = GAME_STATE.PLAYING;
+                    uiOverlay.classList.add('hidden');
+                    pauseButton.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M6 4h4v16H6zM14 4h4v16h-4z"/>
+                    </svg>`; // Pause icon
+                    playButton.textContent = 'Play';
+                    playButton.classList.add('hidden');
+                    startBgMusic();
+                    requestAnimationFrame(gameLoop);
+                }
+            }
+
+            function toggleSound() {
+                soundEnabled = !soundEnabled;
+                localStorage.setItem('birdFlySoundEnabled', soundEnabled);
+                updateSoundToggleButton();
+                if (soundEnabled) {
+                    if (currentState === GAME_STATE.PLAYING) {
+                        startBgMusic();
+                    } else if (currentState === GAME_STATE.GAME_OVER) {
+                        startGameOverMusic();
+                    }
+                } else {
+                    stopBgMusic();
+                    stopGameOverMusic();
+                }
+            }
+
+            function updateSoundToggleButton() {
+                if (soundEnabled) {
+                    soundOnIcon.classList.remove('hidden');
+                    soundOffIcon.classList.add('hidden');
+                    soundToggleButton.setAttribute('aria-label', 'Sound is on. Click to turn off.');
+                    bgMusic.muted = false;
+                    gameOverMusic.muted = false;
+                } else {
+                    soundOnIcon.classList.add('hidden');
+                    soundOffIcon.classList.remove('hidden');
+                    soundToggleButton.setAttribute('aria-label', 'Sound is off. Click to turn on.');
+                    bgMusic.muted = true;
+                    gameOverMusic.muted = true;
+                }
+            }
+
+            function toggleTheme() {
+                document.body.classList.toggle('dark-theme');
+                const currentTheme = document.body.classList.contains('dark-theme') ? 'dark' : 'light';
+                localStorage.setItem('birdFlyTheme', currentTheme);
+                draw(); // Redraw to ensure colors are updated
+            }
+
+            // --- Canvas Resizing ---
+
+            function resizeCanvas() {
+                const { width, height } = getCanvasDimensions();
+                canvas.width = width;
+                canvas.height = height;
+                draw(); // Redraw game elements after resize
+            }
+
+            // --- Initial Setup ---
+            // Ensure all images are loaded before starting the game
+            let assetsLoaded = 0;
+            const totalAssets = 4; // bg.png, pip.png, icon.png, over.png
+
+            function assetLoaded() {
+                assetsLoaded++;
+                if (assetsLoaded === totalAssets) {
+                    initGame();
+                    draw(); // Initial draw for the start screen
+                }
+            }
+
+            backgroundImage.onload = assetLoaded;
+            pipeImage.onload = assetLoaded;
+            birdImage.onload = assetLoaded;
+            gameOverImage.onload = assetLoaded; // The <img> tag itself loads this, just need to count it.
+
+            // If images are cached, onload might not fire, so manually check readyState
+            if (backgroundImage.complete) assetLoaded();
+            if (pipeImage.complete) assetLoaded();
+            if (birdImage.complete) assetLoaded();
+            if (gameOverImage.complete) assetLoaded();
+
+        })();
+    </script>
+</body>
+</html>
